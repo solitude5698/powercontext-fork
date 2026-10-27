@@ -1,0 +1,331 @@
+app:
+  description: 一家会记仇的客栈。掌柜老周把每位客人的金币、声望和旧账存进 seekdb，新会话里仍会阴阳怪气地翻出来。
+  icon: 🏮
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: 赛博客栈·老周的记性
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.5
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: '夜深了，赛博客栈的灯笼还亮着。掌柜老周抬眼看了看你：“又是你啊。”'
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 老周，上次的事你还记得吗？
+    - 我把后院的酒坛砸了
+    - 我想用一壶桂花酿抵了旧账
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: http-request
+      id: 1000000000001-source-1000000000002-target
+      source: '1000000000001'
+      sourceHandle: source
+      target: '1000000000002'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: http-request
+      id: 1000000000002-source-1000000000003-target
+      source: '1000000000002'
+      sourceHandle: source
+      target: '1000000000003'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: http-request
+      id: 1000000000003-source-1000000000004-target
+      source: '1000000000003'
+      sourceHandle: source
+      target: '1000000000004'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: llm
+      id: 1000000000004-source-1000000000005-target
+      source: '1000000000004'
+      sourceHandle: source
+      target: '1000000000005'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: answer
+      id: 1000000000005-source-1000000000006-target
+      source: '1000000000005'
+      sourceHandle: source
+      target: '1000000000006'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - variable: player_id
+          label: 你的名号
+          type: text-input
+          required: true
+          max_length: 32
+          options: []
+        - variable: action
+          label: 你要做的事
+          type: paragraph
+          required: true
+          max_length: 200
+          options: []
+      height: 116
+      id: '1000000000001'
+      position:
+        x: 40
+        y: 300
+      positionAbsolute:
+        x: 40
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"player_id": "{{#1000000000001.player_id#}}"}'
+          type: json
+        desc: 从 seekdb 读取玩家金币、声望、记仇墙与最近事件
+        headers: ''
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 200
+        selected: true
+        timeout:
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 30
+        title: 读取记忆
+        type: http-request
+        url: http://host.docker.internal:8765/api/state
+        variables: []
+      height: 98
+      id: '1000000000002'
+      position:
+        x: 340
+        y: 300
+      positionAbsolute:
+        x: 340
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"query": "{{#1000000000001.action#}}", "k": 3}'
+          type: json
+        desc: 用 seekdb 全文索引检索客栈传说
+        headers: ''
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 200
+        selected: false
+        timeout:
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 30
+        title: 检索传说
+        type: http-request
+        url: http://host.docker.internal:8765/api/lore/search
+        variables: []
+      height: 98
+      id: '1000000000003'
+      position:
+        x: 640
+        y: 300
+      positionAbsolute:
+        x: 640
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: key-value-1
+            key: ''
+            type: text
+            value: '{"player_id": "{{#1000000000001.player_id#}}", "action": "{{#1000000000001.action#}}"}'
+          type: json
+        desc: 在 seekdb 中记账并返回结算后的状态
+        headers: ''
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 200
+        selected: false
+        timeout:
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 30
+        title: 记账结算
+        type: http-request
+        url: http://host.docker.internal:8765/api/act
+        variables: []
+      height: 98
+      id: '1000000000004'
+      position:
+        x: 940
+        y: 300
+      positionAbsolute:
+        x: 940
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.85
+          mode: chat
+          name: gpt-4o-mini
+          provider: openai
+        prompt_template:
+        - id: 7f2b0f38-8f53-4b6e-9d2f-6b8a3c1d2e40
+          role: system
+          text: "你是赛博客栈的掌柜老周，五十来岁，嘴硬心软，记性极好。\n你会收到三段信息：\n【记忆快照】seekdb 里保存的玩家金币、声望、记仇墙和最近五件事；\n【本次结算】玩家这句话带来的金币/声望变化；\n【客栈传说】用 seekdb 全文索引检索出的客栈旧闻。\n\n规则：\n1. 必须至少提到记忆快照中的一个旧事或旧账，新客则说明这是第一次见。\n2. 记仇墙上的事情要用阴阳怪气但不失善意的口吻提，不要真的辱骂。\n3. 可以自然融入一条客栈传说，让它像随口讲出的规矩。\n4. 只输出 3-6 句中文，可以带括号里的动作描写，不要输出 JSON、标题或数值表格。\n5. 不要编造记忆和传说里不存在的人和事。"
+        - id: 0cbb9d55-2c89-4a49-9c7f-5d3b6e8f1a21
+          role: user
+          text: "【记忆快照】\n{{#1000000000002.body#}}\n\n【本次结算】\n{{#1000000000004.body#}}\n\n【客栈传说】\n{{#1000000000003.body#}}\n\n【玩家说】\n{{#1000000000001.action#}}\n\n请以老周的口吻回应。"
+        selected: false
+        title: 老周回应
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: '1000000000005'
+      position:
+        x: 1240
+        y: 300
+      positionAbsolute:
+        x: 1240
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#1000000000005.text#}}'
+        desc: ''
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 98
+      id: '1000000000006'
+      position:
+        x: 1540
+        y: 300
+      positionAbsolute:
+        x: 1540
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7
