@@ -1,0 +1,4 @@
+powercontext[cli,server]==1.4.1
+mysql-connector-python>=8.2,<27
+requests>=2.31,<3
+pytest>=8.0,<10

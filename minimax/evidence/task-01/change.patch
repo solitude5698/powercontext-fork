@@ -1,0 +1,31 @@
+diff --git a/src/order_pricing/rules.py b/src/order_pricing/rules.py
+index 43f4f3d..19d847d 100644
+--- a/src/order_pricing/rules.py
++++ b/src/order_pricing/rules.py
+@@ -3,10 +3,12 @@
+ TIER_DISCOUNTS = {
+     "silver": 0.05,
+     "gold": 0.10,
++    "gold_plus": 0.15,
+ }
+ 
+ BULK_THRESHOLD = 500
+ BULK_BONUS = 0.02
++GOLD_PLUS_THRESHOLD = 1000
+ 
+ 
+ def discount_rate(tier: str, amount: float) -> float:
+@@ -20,6 +22,12 @@ def discount_rate(tier: str, amount: float) -> float:
+         raise ValueError("amount must not be negative")
+ 
+     rate = TIER_DISCOUNTS[tier]
+-    if tier == "gold" and amount >= BULK_THRESHOLD:
++    if tier == "gold_plus":
++        if amount >= GOLD_PLUS_THRESHOLD:
++            return rate
++        rate = TIER_DISCOUNTS["gold"]
++        if amount >= BULK_THRESHOLD:
++            rate += BULK_BONUS
++    elif tier == "gold" and amount >= BULK_THRESHOLD:
+         rate += BULK_BONUS
+     return rate

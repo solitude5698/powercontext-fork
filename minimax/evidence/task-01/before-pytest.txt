@@ -1,0 +1,205 @@
+$ python -m pytest -q tests/test_gold_plus.py
+exit=1
+FFFF                                                                     [100%]
+================================== FAILURES ===================================
+_______________ test_gold_plus_large_order_uses_fifteen_percent _______________
+
+    def test_gold_plus_large_order_uses_fifteen_percent():
+>       assert discount_rate("gold_plus", 1000) == pytest.approx(0.15)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:12: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 1000
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+___________ test_gold_plus_below_large_threshold_follows_gold_bonus ___________
+
+    def test_gold_plus_below_large_threshold_follows_gold_bonus():
+>       assert discount_rate("gold_plus", 999.99) == pytest.approx(0.12)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:17: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 999.99
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+_______________ test_gold_plus_small_order_keeps_gold_base_rate _______________
+
+    def test_gold_plus_small_order_keeps_gold_base_rate():
+>       assert discount_rate("gold_plus", 499.99) == pytest.approx(0.10)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 499.99
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+_________________________ test_gold_plus_final_price __________________________
+
+    def test_gold_plus_final_price():
+>       assert final_price(1500, "gold_plus") == 1275.0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:26: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\order_pricing\rules.py:31: in final_price
+    return round(amount * (1 - discount_rate(tier, amount)), 2)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 1500
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+=========================== short test summary info ===========================
+FAILED tests/test_gold_plus.py::test_gold_plus_large_order_uses_fifteen_percent
+FAILED tests/test_gold_plus.py::test_gold_plus_below_large_threshold_follows_gold_bonus
+FAILED tests/test_gold_plus.py::test_gold_plus_small_order_keeps_gold_base_rate
+FAILED tests/test_gold_plus.py::test_gold_plus_final_price - ValueError: unkn...
+4 failed in 0.09s
+
+$ python -m pytest -q
+exit=1
+FFFF......                                                               [100%]
+================================== FAILURES ===================================
+_______________ test_gold_plus_large_order_uses_fifteen_percent _______________
+
+    def test_gold_plus_large_order_uses_fifteen_percent():
+>       assert discount_rate("gold_plus", 1000) == pytest.approx(0.15)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:12: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 1000
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+___________ test_gold_plus_below_large_threshold_follows_gold_bonus ___________
+
+    def test_gold_plus_below_large_threshold_follows_gold_bonus():
+>       assert discount_rate("gold_plus", 999.99) == pytest.approx(0.12)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:17: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 999.99
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+_______________ test_gold_plus_small_order_keeps_gold_base_rate _______________
+
+    def test_gold_plus_small_order_keeps_gold_base_rate():
+>       assert discount_rate("gold_plus", 499.99) == pytest.approx(0.10)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 499.99
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+_________________________ test_gold_plus_final_price __________________________
+
+    def test_gold_plus_final_price():
+>       assert final_price(1500, "gold_plus") == 1275.0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_gold_plus.py:26: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\order_pricing\rules.py:31: in final_price
+    return round(amount * (1 - discount_rate(tier, amount)), 2)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tier = 'gold_plus', amount = 1500
+
+    def discount_rate(tier: str, amount: float) -> float:
+        """Return the discount rate for one order.
+    
+        Unknown tiers raise ``ValueError`` so that callers never price an order
+        with a silent fallback discount.
+        """
+        if tier not in TIER_DISCOUNTS:
+>           raise ValueError(f"unknown customer tier: {tier}")
+E           ValueError: unknown customer tier: gold_plus
+
+src\order_pricing\rules.py:19: ValueError
+=========================== short test summary info ===========================
+FAILED tests/test_gold_plus.py::test_gold_plus_large_order_uses_fifteen_percent
+FAILED tests/test_gold_plus.py::test_gold_plus_below_large_threshold_follows_gold_bonus
+FAILED tests/test_gold_plus.py::test_gold_plus_small_order_keeps_gold_base_rate
+FAILED tests/test_gold_plus.py::test_gold_plus_final_price - ValueError: unkn...
+4 failed, 6 passed in 0.11s
