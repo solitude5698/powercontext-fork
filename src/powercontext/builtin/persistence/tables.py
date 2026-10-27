@@ -1180,6 +1180,35 @@ RECURRENCE_OBSERVATION_TABLE = Table(
 
 RECURRENCE_TABLES = (RECURRENCE_MATCH_TABLE, RECURRENCE_OBSERVATION_TABLE)
 
+# One row per registered evidence node. Rows are replaced in place as availability
+# propagates, so the table never grows with the number of lifecycle events.
+SOURCE_LIFECYCLE_NODES_TABLE = Table(
+    "pc_source_lifecycle_nodes",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("node_id", identity_string(MAX_MEMORY_ENTRY_ID_LENGTH), primary_key=True),
+    Column("ordinal", Integer, nullable=False),
+    Column("node_type", String(8), nullable=False),
+    Column("parents", _entry_text_type(), nullable=False),
+    Column("policy", String(4), nullable=False),
+    Column("reference", _entry_text_type(), nullable=False),
+    Column("revision", Integer),
+    Column("sequence", Integer, nullable=False),
+    Column("event_digest", identity_string(64)),
+    Column("available", Boolean, nullable=False),
+    ForeignKeyConstraint(("scope_id",), ("pc_scopes.scope_id",), ondelete="CASCADE"),
+    UniqueConstraint("scope_id", "ordinal", name="uq_pc_source_lifecycle_ordinal"),
+    CheckConstraint(
+        "node_type IN ('source', 'memory', 'topic')",
+        name="ck_pc_source_lifecycle_node_type",
+    ),
+    CheckConstraint("policy IN ('all', 'any')", name="ck_pc_source_lifecycle_policy"),
+    CheckConstraint("ordinal > 0", name="ck_pc_source_lifecycle_ordinal_positive"),
+    CheckConstraint("sequence >= 0", name="ck_pc_source_lifecycle_sequence_nonnegative"),
+)
+
+SOURCE_LIFECYCLE_TABLES = (SOURCE_LIFECYCLE_NODES_TABLE,)
+
 BUILTIN_TABLES = (
     SCOPE_TABLES
     + SHARED_TABLES
@@ -1187,5 +1216,6 @@ BUILTIN_TABLES = (
     + MEMORY_TABLES
     + STATISTICS_TABLES
     + RECURRENCE_TABLES
+    + SOURCE_LIFECYCLE_TABLES
     + (ARTIFACT_TAGS_TABLE, DREAM_RUNS_TABLE, RECEIPT_MIGRATION_REVIEW_TABLE)
 )

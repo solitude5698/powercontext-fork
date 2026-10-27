@@ -143,6 +143,7 @@ from powercontext.builtin.persistence.artifact_governance import (
     ArtifactGovernance,
     ArtifactLifecycleState,
 )
+from powercontext.builtin.persistence.lifecycle import SourceLifecycleRepository
 from powercontext.builtin.persistence.skill_publications import SkillPublication
 from powercontext.builtin.publication import ArtifactPublicationApplication
 from powercontext.builtin.records import (
@@ -166,6 +167,7 @@ from powercontext.builtin.runtime._scope_cache import (
     ScopeCacheObserver,
     ScopeEvictor,
 )
+from powercontext.builtin.runtime.context_pack import ContextPack, ContextPackDelta
 from powercontext.builtin.runtime.decision_model import DecisionModel
 from powercontext.builtin.runtime.errors import InvalidRuntimeRequestError, TopicMemoryProcessingUnavailableError
 from powercontext.builtin.runtime.models import (
@@ -248,6 +250,7 @@ from powercontext.builtin.runtime.recall_sufficiency import (
     build_recall_candidates,
     recall_effort,
 )
+from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleApplication
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics, overview_selection
 from powercontext.builtin.scope import ScopeApplication, ScopeDescriptor, ScopeSelection
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
@@ -846,6 +849,21 @@ class ScopedContextApplication:
             if authorize_scopes is not None:
                 await authorize_scopes((self.scope_id, *scope.context_references))
             return await self._prepare(request, scope)
+
+    async def prepare_incremental(
+        self,
+        request: PrepareContextRequest,
+        /,
+        *,
+        base_pack: ContextPack | None = None,
+        authorize_scopes: Callable[[tuple[str, ...]], Awaitable[None]] | None = None,
+    ) -> ContextPack | ContextPackDelta:
+        """Send a full pack on the first call and a prefix delta when a base is supplied."""
+        prepared = await self.prepare(request, authorize_scopes=authorize_scopes)
+        target = ContextPack.from_content(prepared.content or "")
+        if base_pack is None:
+            return target
+        return ContextPackDelta.between(base_pack, target)
 
     async def _prepare(self, request: PrepareContextRequest, scope: ScopeDescriptor, /) -> PreparedContext:
         build, effort = await self._prepare_build(request, scope)
@@ -2667,6 +2685,7 @@ class ScopedTopicMemoryApplication:
                     query_embedding,
                     embedding_timeout_seconds,
                 )
+            result = await self._without_withdrawn_topics(result)
         observer = self._runtime._topic_memory_search_observer
         if observer is not None:
             try:
@@ -2684,6 +2703,18 @@ class ScopedTopicMemoryApplication:
                     },
                 )
         return result
+
+    async def _without_withdrawn_topics(self, result: TopicMemorySearchResult) -> TopicMemorySearchResult:
+        """Drop hits whose registered Topic lost its dependency support."""
+
+        repository = self._runtime._source_lifecycle
+        if repository is None or not result.hits:
+            return result
+        withdrawn = await repository.inactive_artifact_ids(self.scope_id)
+        if not withdrawn:
+            return result
+        hits = tuple(hit for hit in result.hits if hit.artifact_ref.artifact_id not in withdrawn)
+        return result if len(hits) == len(result.hits) else result.model_copy(update={"hits": hits})
 
     async def _search_with_embedding(
         self,
@@ -3013,6 +3044,7 @@ class BuiltinRuntime:
         remote_skill_distribution: RemoteSkillDistributionService | None = None,
         statistics_service: StatisticsServiceFactory | None = None,
         record_service: RecordService | None = None,
+        source_lifecycle_repository: SourceLifecycleRepository | None = None,
         prompt_service: PromptService | None = None,
         recall_token_estimator: RecallTokenEstimator | None = None,
         recall_effort_sink: RecallEffortSink | None = None,
@@ -3069,6 +3101,7 @@ class BuiltinRuntime:
         self._remote_skill_distribution = remote_skill_distribution
         self._statistics_service = statistics_service
         self._record_service = record_service
+        self._source_lifecycle = source_lifecycle_repository
         self._prompt_service = prompt_service
         self._recall_token_estimator = recall_token_estimator
         self._recall_effort_sink = recall_effort_sink
@@ -3109,6 +3142,7 @@ class BuiltinRuntime:
         self.handoff = HandoffApplication(self)
         self.work = WorkApplication(self)
         self.memory = MemoryApplication(self)
+        self.lifecycle = SourceLifecycleApplication(self)
         self.topic_memory = TopicMemoryApplication(self)
         self.records = RecordApplication(self)
         self.prompts = PromptApplication(self)
