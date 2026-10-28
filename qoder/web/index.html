@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>周报匠 · 把零散笔记变成周报</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">周报匠</span>
+        <div>
+          <h1>零散笔记 → 周报草稿</h1>
+          <p>seekdb 全文检索（ik） + 偏好记忆</p>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge" id="badge-engine">seekdb：连接中</span>
+        <span class="badge" id="badge-week">本周：—</span>
+        <span class="badge" id="badge-notes">笔记：—</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>1. 记一笔</h2>
+        <p class="hint">一行一条，自动归类为「完成 / 风险 / 计划」。支持批量粘贴会议纪要。</p>
+        <textarea id="notes" rows="7" placeholder="修完检索结果分页的 bug，已上线&#10;缓存服务偶发超时，阻塞联调&#10;下周补检索链路的回归用例"></textarea>
+        <div class="row">
+          <button id="save" class="primary" type="button">写入 seekdb</button>
+          <button id="demo" class="ghost" type="button">载入示例</button>
+          <button id="clear-input" class="ghost" type="button">清空输入</button>
+        </div>
+        <div class="progress"><span id="save-status">尚未写入</span></div>
+
+        <h2>2. 本周笔记</h2>
+        <div class="row">
+          <input id="week" type="text" placeholder="2026-W42" />
+          <button id="load" class="ghost" type="button">刷新</button>
+        </div>
+        <ul id="note-list" class="list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>3. 全库检索（seekdb 全文索引）</h2>
+        <div class="row">
+          <input id="query" type="search" placeholder="比如：缓存 超时 / 分页 / 回归用例" />
+          <button id="search" class="primary" type="button">检索</button>
+        </div>
+        <div class="meta-row">
+          <span id="search-status">等待检索</span>
+          <span id="search-timing"></span>
+        </div>
+        <ol id="results" class="results"></ol>
+
+        <h2>4. 生成周报</h2>
+        <div class="row">
+          <input id="author" type="text" placeholder="署名（会记入偏好）" />
+          <select id="tone">
+            <option value="简洁">简洁</option>
+            <option value="正式">正式</option>
+            <option value="口语">口语</option>
+          </select>
+          <button id="save-prefs" class="ghost" type="button">保存偏好</button>
+        </div>
+        <div class="row">
+          <button id="report" class="primary" type="button">生成本周周报</button>
+          <button id="copy" class="ghost" type="button">复制</button>
+        </div>
+        <pre id="draft" class="draft">还没有生成周报。</pre>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <span id="status">准备就绪</span>
+      <span id="prefs">偏好：—</span>
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

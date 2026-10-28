@@ -1,0 +1,16 @@
+{
+  "name": "weeklysmith-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "WeeklySmith: 把零散工作笔记整理成周报草稿（seekdb 全文检索 + 偏好记忆）",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "seed": "node ../samples/seed.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "seekdb": "1.4.0"
+  }
+}

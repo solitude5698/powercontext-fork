@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>周报匠 WeeklySmith · 把零散笔记变成周报</title>
+    <meta name="description" content="周报匠：把一周的零散笔记和会议纪要自动归类，用 seekdb 全文检索找回记录，一键生成周报草稿，并记住你的署名与语气偏好。" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="wrap">
+        <p class="eyebrow">2026 OceanBase 数据库大赛 · Qoder 方向</p>
+        <h1>周报匠 WeeklySmith</h1>
+        <p class="lede">
+          把一周里随手记的零散笔记、会议纪要，整理成一份可以直接发出去的周报草稿；
+          用 seekdb 的中文全文检索随时找回某条记录，署名与语气偏好会被记住，下次生成自动带上。
+        </p>
+        <div class="cta">
+          <a class="btn primary" href="#demo">看实际效果</a>
+          <a class="btn" href="https://github.com/solitude5698/powercontext-fork/tree/qoder-notes/qoder" target="_blank" rel="noreferrer">代码仓库</a>
+          <a class="btn" href="#run">本地运行</a>
+        </div>
+        <ul class="facts">
+          <li><strong>2–30 ms</strong>seekdb 全文检索</li>
+          <li><strong>12 ms</strong>单条笔记写入</li>
+          <li><strong>3 类</strong>自动归类：完成 / 风险 / 计划</li>
+        </ul>
+      </div>
+    </header>
+
+    <main>
+      <section class="wrap section">
+        <h2>要解决的问题</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>周五下午的重复劳动</h3>
+            <p>一周的进展散落在聊天记录、待办清单和会议纪要里，写周报时要一条条翻、再手工分类，通常要花 30–60 分钟。</p>
+          </article>
+          <article class="card">
+            <h3>风险项最容易被漏掉</h3>
+            <p>延期、阻塞这类信息往往混在流水账里，翻的时候漏掉一条，就要等下周一才发现。</p>
+          </article>
+          <article class="card">
+            <h3>格式每次都要重排</h3>
+            <p>改了署名、换了团队，模板就得再调一遍；偏好没有地方存，每次都要重新设置。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="wrap section" id="demo">
+        <h2>实际效果</h2>
+        <p class="muted">下面是在本地运行时的真实截图（Chromium 1440px 视口，数据来自仓库里的示例笔记）。</p>
+        <figure>
+          <img src="./assets/app-demo.png" alt="周报匠主界面：左侧本周笔记与自动归类，右侧全文检索结果与生成的周报草稿" />
+          <figcaption>左侧随手记并按「完成 / 风险 / 计划」自动归类；右侧是 seekdb 全文检索与一键生成的周报草稿。</figcaption>
+        </figure>
+      </section>
+
+      <section class="wrap section">
+        <h2>核心流程</h2>
+        <ol class="steps">
+          <li>
+            <strong>记一笔</strong>
+            <p>一行一条粘贴进来，服务端按关键词规则归入「完成 / 风险 / 计划」，写入 seekdb 的 <code>work_notes</code> 表。</p>
+          </li>
+          <li>
+            <strong>找得回</strong>
+            <p>检索走 seekdb 的中文全文索引（<code>FULLTEXT ... WITH PARSER ik</code>），<code>MATCH ... AGAINST</code> 打分并按周过滤，命中结果带相关度与库内耗时。</p>
+          </li>
+          <li>
+            <strong>出草稿</strong>
+            <p>按周聚合三类笔记生成 Markdown 草稿，风险项单独成节；生成记录写入 <code>report_history</code>。</p>
+          </li>
+          <li>
+            <strong>会记事</strong>
+            <p>署名、语气存于 <code>user_prefs</code>，下次生成自动复用，并在草稿尾部提示上次生成时间。</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="wrap section">
+        <h2>技术实现</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>seekdb 的分工</h3>
+            <p>
+              三张表全部落在 seekdb：笔记与归类、偏好记忆、周报历史。检索不是把数据拉到应用层过滤，而是在库内用中文全文索引打分，
+              应用只负责把查询条件和结果渲染出来。
+            </p>
+            <pre><code>SELECT id, content, MATCH(content) AGAINST('缓存') AS score
+FROM work_notes
+WHERE MATCH(content) AGAINST('缓存') AND week = '2026-W42'
+ORDER BY score DESC;</code></pre>
+          </article>
+          <article class="card">
+            <h3>应用结构</h3>
+            <p>
+              Node.js + Express 提供 6 个 API；前端是原生 HTML/CSS/ESM，没有构建步骤，评审按说明即可跑起来。
+              所有配置走 <code>.env</code> 占位值，仓库不含任何真实凭据。
+            </p>
+            <pre><code>qoder/
+├── server/src/index.mjs   # API + seekdb 访问
+├── web/                   # 单页界面
+├── samples/               # 示例笔记 + 灌数据脚本
+└── docs/DEVLOG.md         # Qoder 开发记录</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="wrap section" id="run">
+        <h2>本地运行</h2>
+        <pre class="terminal"><code># 1. seekdb
+docker run -d --name seekdb -p 2882:2882 oceanbase/seekdb:latest
+
+# 2. 服务
+cd qoder/server
+cp .env.example .env
+npm install --legacy-peer-deps
+npm start                       # http://127.0.0.1:8891
+
+# 3. 示例数据
+cd ..
+node samples/seed.mjs http://127.0.0.1:8891</code></pre>
+        <p class="muted">
+          打开 <code>http://127.0.0.1:8891</code>，周次填 <code>2026-W42</code>，检索「缓存」，再点「生成本周周报」，
+          即可看到截图中的结果。完整验证步骤与库内核对 SQL 见仓库 <code>qoder/README.md</code>。
+        </p>
+      </section>
+
+      <section class="wrap section">
+        <h2>关于</h2>
+        <p class="muted">
+          本项目为 2026 OceanBase 数据库大赛「Qoder 方向」参赛作品，使用 Qoder 完成需求拆解、编码、调试与验证，
+          核心数据与检索能力由 seekdb 提供。开发过程记录见仓库 <code>qoder/docs/DEVLOG.md</code>。
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap">
+        <span>周报匠 WeeklySmith</span>
+        <a href="https://github.com/solitude5698/powercontext-fork/tree/qoder-notes/qoder" target="_blank" rel="noreferrer">GitHub 仓库</a>
+      </div>
+    </footer>
+  </body>
+</html>
