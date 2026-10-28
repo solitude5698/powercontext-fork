@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>纸间 · 本地知识库</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">纸间</span>
+        <div>
+          <h1>本地知识库</h1>
+          <p>浏览器端向量化 · seekdb 混合检索</p>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge" id="badge-backend">推理后端：未加载</span>
+        <span class="badge" id="badge-dtype">精度：—</span>
+        <span class="badge" id="badge-gateway">seekdb：连接中</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>知识库</h2>
+        <div class="row">
+          <select id="collection-select" aria-label="知识库"></select>
+          <button id="collection-new" class="ghost" type="button">新建</button>
+        </div>
+        <div class="row">
+          <button id="collection-reset" class="ghost" type="button">清空当前</button>
+          <button id="collection-delete" class="ghost danger" type="button">删除当前</button>
+        </div>
+
+        <h2>导入笔记</h2>
+        <textarea id="notes" rows="8" placeholder="每行一条笔记，或用空行分隔段落。例如：&#10;HNSW 通过分层图结构把近邻检索的复杂度降到对数级。&#10;WebGPU 让浏览器可以直接调度 GPU 做模型推理。"></textarea>
+        <div class="row">
+          <button id="import" type="button" class="primary">向量化并写入</button>
+          <button id="demo" type="button" class="ghost">载入示例</button>
+          <button id="clear-notes" type="button" class="ghost">清空输入</button>
+        </div>
+        <div class="progress" aria-live="polite">
+          <div class="progress-bar"><span id="progress-fill"></span></div>
+          <span id="progress-text">尚未开始</span>
+        </div>
+        <p class="hint">文档与查询向量都在本机浏览器内计算；seekdb 负责存储与混合检索。</p>
+      </section>
+
+      <section class="panel">
+        <h2>检索</h2>
+        <div class="row">
+          <input id="query" type="search" placeholder="问点什么，比如：如何在浏览器里跑量化模型？" />
+          <button id="search" type="button" class="primary">检索</button>
+        </div>
+        <div class="meta-row">
+          <span id="search-mode">等待检索</span>
+          <span id="search-timing"></span>
+        </div>
+        <ol id="results" class="results"></ol>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <span id="status">准备就绪</span>
+      <span id="timing">端到端：—</span>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

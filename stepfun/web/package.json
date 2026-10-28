@@ -1,0 +1,21 @@
+{
+  "name": "stepfun-notes-web",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "On-device notes knowledge base: browser embeddings + seekdb hybrid search",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "sync:ort": "node scripts/sync-ort.mjs",
+    "postinstall": "node scripts/sync-ort.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1"
+  },
+  "devDependencies": {
+    "vite": "^7.1.5"
+  }
+}

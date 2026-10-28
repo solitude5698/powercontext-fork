@@ -1,0 +1,41 @@
+{
+  "environment": {
+    "date": "2026-10-28",
+    "os": "Windows 11 (10.0.26200), 16 logical cores, 32 GB RAM",
+    "browser": "Chromium 150 (Electron 43.1.1, Qoder 内置浏览器)",
+    "gpu": "AMD Radeon(TM) 780M (ANGLE D3D11)",
+    "seekdb": "5.7.25-OceanBase seekdb-v1.3.0.0 local server, port 2882",
+    "model": "Xenova/bge-small-zh-v1.5 INT8 (24,010,842 bytes), 512 dims, FP32 基线 94,851,877 bytes",
+    "batchSize": 8,
+    "corpus": "内置 8 条示例笔记；吞吐测试用 40 条（8 条 × 5 份）",
+    "note": "所有耗时均为页面内 performance.now() 实测，取当次会话多次运行的代表值"
+  },
+  "modelLoadMs": {
+    "webgpu": [1650, 2031],
+    "wasm": [989, 995, 1029],
+    "note": "worker 内从 init 到模型加载 + 8 条预热推理完成"
+  },
+  "import8FirstMs": {
+    "webgpu": [2048, 2436],
+    "wasm": [1312, 1344],
+    "note": "页面首次导入的向量化耗时（模型已加载，WebGPU 首轮含 kernel/shader 编译）"
+  },
+  "import40WarmMs": { "webgpu": [1703], "wasmBatch8": [1328], "wasmBatch1": [1318] },
+  "import3WarmMs": { "webgpu": [161], "note": "增量导入 3 条到已有 40 条的集合" },
+  "queryEmbedMs": { "webgpu": [135, 98], "wasm": [24, 25] },
+  "seekdbSearchMs": { "webgpu": [20.2, 8.0], "wasm": [17.5, 7.2] },
+  "endToEndQueryMs": { "webgpu": [185, 125], "wasm": [62, 62] },
+  "incrementalWrite": {
+    "before": 40,
+    "inserted": 3,
+    "after": 43,
+    "visibleImmediately": true,
+    "firstHit": "新增笔记：INT8 量化后的模型体积约为 FP32 的四分之一，适合端侧分发。",
+    "note": "写入返回后立即可检索（HNSW 同步模式下 seekdb 内部完成索引刷新），无需重建集合"
+  },
+  "observations": [
+    "本机集显上 INT8 模型的 WASM 路径反而比 WebGPU 快：40 条热态导入 1328 ms vs 1703 ms，单条查询向量化 24 ms vs 98 ms；WebGPU 的每次推进 dispatch 开销大于小模型算力收益。",
+    "批大小对 WASM 影响很小（40 条 batch=8 1328 ms，batch=1 1318 ms），说明单条推理已接近线性下界。",
+    "seekdb 库内混合检索稳定在 7–21 ms，与集合大小（40–43 条）无关，检索耗时远小于端侧向量化。"
+  ]
+}

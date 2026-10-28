@@ -1,0 +1,117 @@
+{
+  "model": "Xenova/bge-small-zh-v1.5",
+  "runtime": "transformers.js (Node, CPU)",
+  "corpusSize": 24,
+  "queryCount": 12,
+  "fp32": {
+    "recallAt1": 0.8333333333333334,
+    "recallAt3": 1,
+    "mrr": 0.9027777777777778,
+    "embedMs64": 167
+  },
+  "int8": {
+    "recallAt1": 0.8333333333333334,
+    "recallAt3": 1,
+    "mrr": 0.9027777777777778,
+    "embedMs64": 77
+  },
+  "meanCosineFp32VsInt8": 0.9909459036719129,
+  "perQuery": [
+    {
+      "query": "向量检索为什么要用分层图",
+      "topic": "hnsw",
+      "rank": 1,
+      "top": "hnsw2",
+      "int8Rank": 1,
+      "int8Top": "hnsw2"
+    },
+    {
+      "query": "浏览器怎么直接使用显卡算力",
+      "topic": "webgpu",
+      "rank": 1,
+      "top": "webgpu2",
+      "int8Rank": 1,
+      "int8Top": "webgpu2"
+    },
+    {
+      "query": "8 位量化能把模型压缩多少",
+      "topic": "int8",
+      "rank": 1,
+      "top": "int8",
+      "int8Rank": 1,
+      "int8Top": "int8"
+    },
+    {
+      "query": "哪种数据库能同时做语义和关键词检索",
+      "topic": "seekdb",
+      "rank": 3,
+      "top": "payload",
+      "int8Rank": 3,
+      "int8Top": "bm25"
+    },
+    {
+      "query": "精确关键词打分用的是什么算法",
+      "topic": "bm25",
+      "rank": 1,
+      "top": "bm252",
+      "int8Rank": 1,
+      "int8Top": "bm252"
+    },
+    {
+      "query": "倒排排名融合是什么意思",
+      "topic": "rrf",
+      "rank": 1,
+      "top": "rrf",
+      "int8Rank": 1,
+      "int8Top": "rrf"
+    },
+    {
+      "query": "周报应该怎么写结构",
+      "topic": "weekly",
+      "rank": 1,
+      "top": "weekly2",
+      "int8Rank": 1,
+      "int8Top": "weekly2"
+    },
+    {
+      "query": "考试前怎么复习错题",
+      "topic": "exams",
+      "rank": 1,
+      "top": "exams",
+      "int8Rank": 1,
+      "int8Top": "exams"
+    },
+    {
+      "query": "什么算法能快速分解大整数",
+      "topic": "quantum",
+      "rank": 1,
+      "top": "quantum2",
+      "int8Rank": 1,
+      "int8Top": "quantum"
+    },
+    {
+      "query": "模型文件第二次打开还要下载吗",
+      "topic": "cache",
+      "rank": 1,
+      "top": "cache",
+      "int8Rank": 1,
+      "int8Top": "cache"
+    },
+    {
+      "query": "批量推理为什么要按长度分桶",
+      "topic": "tokenize",
+      "rank": 1,
+      "top": "tokenize",
+      "int8Rank": 1,
+      "int8Top": "tokenize"
+    },
+    {
+      "query": "每条知识记录应该存哪些字段",
+      "topic": "payload",
+      "rank": 2,
+      "top": "bm252",
+      "int8Rank": 2,
+      "int8Top": "bm252"
+    }
+  ]
+}

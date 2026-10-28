@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+stepfun/web/public/ort/
+.work/
+__pycache__/

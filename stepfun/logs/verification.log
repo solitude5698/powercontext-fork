@@ -1,0 +1,129 @@
+# StepFun 赛题端到端验证记录（2026-10-28）
+
+环境：Windows 11 / Chromium 150 / AMD Radeon 780M / seekdb-v1.3.0.0 (127.0.0.1:2882)
+模型：Xenova/bge-small-zh-v1.5 INT8（24,010,842 bytes，512 维，MIT），
+      查询侧加 BGE 指令前缀「为这个句子生成表示以用于检索相关文章：」，文档侧不加
+应用：网关 127.0.0.1:8790，前端 http://localhost:5173（dev）/ http://localhost:4173（preview）
+
+## 1. 网关与 seekdb 连接
+
+```
+$ curl -s http://127.0.0.1:8790/api/health
+{"ok":true,"engine":"5.7.25-OceanBase seekdb-v1.3.0.0","database":"step_notes","analyzer":"ik","dimension":512}
+
+$ curl -s http://127.0.0.1:8790/api/collections
+{"collections":[{"name":"wasm_warm","count":8},{"name":"wasm40c","count":40},{"name":"gpu_warm","count":8},
+{"name":"wasm_demo","count":8},{"name":"wasm40","count":40},{"name":"wasm40b","count":40},
+{"name":"gpu40","count":43},{"name":"demo_notes","count":8}]}
+```
+
+集合注册表（seekdb 内 sdk_collections，逐集合一行）：
+
+```
+collection_name  schema
+gpu40            {"vectorIndex":{"hnsw":{"distance":"cosine","dimension":512}},
+                  "fulltextIndex":{"analyzer":"ik","properties":{"ik_mode":"smart"}},"version":"v2"}
+```
+
+`SHOW CREATE TABLE`（gpu40，含 43 条文档）：
+
+```sql
+CREATE TABLE `c$v2$<id>` (
+  `_id` varbinary(512) NOT NULL,
+  `document` string DEFAULT NULL,
+  `embedding` VECTOR(512) DEFAULT NULL,
+  `metadata` json DEFAULT NULL,
+  PRIMARY KEY (`_id`),
+  FULLTEXT KEY `idx_fts` (`document`) WITH PARSER ik PARSER_PROPERTIES=(ik_mode="smart"),
+  VECTOR KEY `idx_vec` (`embedding`) WITH (DISTANCE=COSINE, TYPE=HNSW, LIB=VSAG,
+    M=16, EF_CONSTRUCTION=200, EF_SEARCH=64, SYNC_MODE=ASYNC)
+) ORGANIZATION HEAP DEFAULT CHARSET = utf8mb4 COMPRESSION = 'zstd_1.3.8';
+```
+
+## 2. WebGPU 路径（默认）
+
+页面 `http://localhost:5173/?device=webgpu&batch=8`，首次导入前徽标为「未加载」，导入触发 worker 初始化：
+
+```
+徽标：推理后端：WebGPU / 精度：INT8
+模型加载：1650 ms（含 8 条预热推理）
+首次导入（8 条，含首轮 shader/kernel 编译）：向量化 2048 ms · 写入 8 条 · 端到端 2294 ms
+热态导入 40 条（batch=8）：向量化 1703 ms · 写入 40 条 · 端到端 1894 ms
+```
+
+查询（gpu40，43 条）：
+
+```
+Q「显卡上跑量化模型的基本思路」
+  模式：混合检索（seekdb RRF）
+  向量化 135 ms · 检索 20.2 ms · 端到端 185 ms
+  #1 WebGPU 允许浏览器直接调度 GPU，Transformers.js 在支持 WebGPU 的环境下会优先把 ONNX 计算放到显卡上执行。（第3份笔记）
+Q「混合检索怎么融合两路排名」
+  向量化 98 ms · 检索 8.0 ms · 端到端 125 ms
+  #1 RRF（倒数排名融合）把两路检索的名次转换为分数相加，无需对齐两路分值的量纲。（第2份笔记）
+```
+
+## 3. WASM 降级路径（?device=wasm）
+
+```
+徽标：推理后端：WASM / 精度：INT8
+模型加载：989 ms（含预热）
+首次导入（8 条）：向量化 1312 ms · 写入 8 条 · 端到端 1561 ms
+热态导入 40 条（batch=1）：向量化 1318 ms · 写入 40 条 · 端到端 1485 ms
+Q「显存不够时怎么自动降级」：向量化 24 ms · 检索 17.5 ms · 端到端 62 ms
+Q「什么是倒数排名融合」    ：向量化 25 ms · 检索 7.2 ms · 端到端 62 ms
+```
+
+降级验证：在支持 WebGPU 的环境强制 `?device=wasm`，徽标与检索全部正常；WebGPU 不可用时 worker `init()` 的 try/catch 会报告 `phase: fallback`，状态栏提示「WebGPU 不可用，正在降级到 WASM…」，随后仍以 WASM 输出 `ready`。
+
+实测结论（与题目预期不同，如实记录）：**本机集显上 INT8 模型的 WASM 反而更快**——40 条热态导入 1328/1318 ms（WASM）对 1703 ms（WebGPU），单条查询向量化 24 ms 对 98 ms。原因是 BGE-small INT8 的计算量太小，WebGPU 每次推进的 dispatch/同步开销大于算力收益。应用仍按题目要求优先 WebGPU、并在界面显式标注后端与精度。
+
+## 4. 批大小对比（WASM，模型预热后，40 条 = 8 条 × 5 份）
+
+| 语料 | batch=8 | batch=1 |
+| --- | --- | --- |
+| 40 条中文笔记 | 1328 ms | 1318 ms |
+
+结论：该模型 + WASM 后端下批处理几乎无收益（短文本填充开销抵消并行收益），单条推理约 32 ms 已接近线性下界；默认 batch=8 仅为预留长文本场景，可用 `?batch=` 复测。
+
+## 5. 增量写入与刷新
+
+在已有 40 条文档的 gpu40 集合中追加 3 条新笔记：
+
+```
+写入前：gpu40（40）
+状态：已写入 3 条，当前共 43 条
+计时：向量化 161 ms · 写入 3 条 · 端到端 280 ms
+写入后：gpu40（43）
+立即检索「新增笔记里 INT8 量化体积是多少比例」：
+  模式：混合检索（seekdb RRF）
+  #1 新增笔记：INT8 量化后的模型体积约为 FP32 的四分之一，适合端侧分发。
+  #2 INT8 量化把权重从 32 位浮点压缩到 8 位整数，模型体积约缩小到四分之一，端侧加载更快。（第2份笔记）
+  计时：向量化 95 ms · 检索 8.1 ms
+```
+
+新文档在写入返回后立即可被检出（seekdb 内部完成 HNSW 与倒排索引刷新，ASYNC 同步模式下无需客户端重建索引）；刷新页面后仍可检索（数据在 seekdb 内）。
+
+## 6. 量化前后质量（Node CPU 复算，24 条语料 / 12 条查询）
+
+```
+node scripts/quality-eval.mjs C:/tmp/bge-fp32-model
+```
+
+| 指标 | FP32 | INT8 |
+| --- | --- | --- |
+| Recall@1 | 83.3% | 83.3% |
+| Recall@3 | 100% | 100% |
+| MRR | 0.903 | 0.903 |
+| 平均余弦相似度漂移 | — | 0.9909（与 FP32 向量对比） |
+| 64 条文本向量化耗时 | 167 ms | 77 ms |
+
+模型体积：94,851,877 → 24,010,842 bytes，压缩 3.95×。明细见 `bench/quality-results.json`。
+
+## 7. 排查记录
+
+1. `vite dev` 下 ORT 动态 import `/ort/*.mjs` 被 Vite 追加 `?import` 并返回 500（"file is in /public ... should not be imported"），生产构建正常。已加 `vite.config.js` 中间件，对 `/ort/*.mjs` 原样返回，dev/preview 行为一致。
+2. WebGPU 首次加载曾请求不存在的 `model_fp16.onnx`（public 目录 404 回退到 index.html，protobuf 解析失败），导致后端初始化失败。改为 WebGPU 与 WASM 统一使用 INT8（q8）模型，仓库只需 24.0 MB 模型文件。
+3. 初次实现下载的模型被截断导致 `protobuf parsing failed`；用 `curl -C -` 续传并按 content-length 校验（INT8 24,010,842 / FP32 94,851,877 bytes）后通过，同时清理了浏览器 Cache Storage 中的旧副本。
+4. 首个模型 `Xenova/all-MiniLM-L6-v2` 只有英文语料，中文查询与文档的余弦相似度集中在 0.2–0.4，质量评估 Recall@1 仅 25%。换成中文 `Xenova/bge-small-zh-v1.5` 并给查询加 BGE 指令前缀后，Recall@1 升到 83.3%，Recall@3 100%。向量维度由 384 改为 512：网关 `EMBEDDING_DIMENSION=512`，旧的 384 维集合已全部删除重建。
+5. 同一集合重复导入相同文本会撞主键（`Duplicate entry ... for '_id'`），因文档 ID 由 `集合名+序号+文本` 哈希生成；测试时切换到新集合或先「清空当前」。

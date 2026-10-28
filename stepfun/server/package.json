@@ -1,0 +1,15 @@
+{
+  "name": "stepfun-notes-server",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "seekdb-js gateway for the on-device notes knowledge base",
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "seekdb": "^1.4.0"
+  }
+}
