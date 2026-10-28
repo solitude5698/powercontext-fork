@@ -20,8 +20,9 @@ import hashlib
 import io
 import math
 import re
+import sys
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -189,9 +190,8 @@ _STOPWORDS = frozenset(
     ourselves out over own same she should so some such than that the their theirs them
     themselves then there these they this those through to too under until up very was we were
     what when where which while who whom why will with would you your yours yourself yourselves
-    company pepsico fy fiscal year report""".split()
+    how much many""".split()
 )
-_HEADER_SKIP = frozenset("of the and to in for".split())
 
 
 def _root(token: str) -> str:
@@ -201,24 +201,33 @@ def _root(token: str) -> str:
         return token
     if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
         token = token[:-1]
-    return token[:6]
+    return sys.intern(token[:6])
 
 
-def _phrase_roots(phrase: str) -> tuple[str, ...]:
+def _fold(phrase: str) -> tuple[str, ...]:
     return tuple(_root(token) for token in _TOKEN_PATTERN.findall(phrase.lower()))
-
-
-def _content_roots(pattern: tuple[str, ...]) -> tuple[str, ...]:
-    """Drop filler words so titles and intents compare against heading text."""
-
-    return tuple(token for token in pattern if token not in _HEADER_SKIP and len(token) > 1)
 
 
 def _tokens(text: str) -> list[str]:
     return [_root(token) for token in _TOKEN_PATTERN.findall(text.lower())]
 
 
+_INSTRUCTION_TAIL = re.compile(
+    r"\bif\b[^.?]*\bnot (?:a |an )?(?:useful|relevant|appropriate|meaningful|standard) (?:metric|measure)\b.*$"
+    r"|\bplease (?:state|provide|explain|note|justify|show|calculate|round|use|assume|respond)\b.*$"
+    r"|\banswer (?:in|with|using)\b.*$"
+    r"|\brespond (?:in|with|using)\b.*$"
+    r"|\bround (?:to|your)\b.*$"
+    r"|\bshow your work\b.*$"
+    r"|\bmake sure\b.*$",
+    re.IGNORECASE,
+)
+
+
 def _query_terms(question: str) -> list[str]:
+    core = _INSTRUCTION_TAIL.sub("", question)
+    if len(_TOKEN_PATTERN.findall(core)) >= 2:
+        question = core
     terms: list[str] = []
     seen: set[str] = set()
     for token in _TOKEN_PATTERN.findall(question.lower()):
@@ -231,189 +240,255 @@ def _query_terms(question: str) -> list[str]:
     return terms
 
 
-# Question intents that 10-K prose answers with different vocabulary than the question uses.
+# Generic filing vocabulary: the words a question uses versus the words a 10-K uses for
+# the same thing. Triggers are matched against folded question terms.
 _CONCEPTS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (
-        ("geography", "geographies", "region", "regions", "country", "countries", "market", "markets"),
+        ("geograph", "geographi", "region", "countri", "market"),
         (
-            "geographic segment",
             "north america",
+            "latin america",
             "europe",
             "asia pacific",
-            "latin america",
-            "africa",
             "middle east",
-            "amesa",
+            "africa",
+            "geographic information",
+            "international operations",
+            "united states",
         ),
     ),
     (
-        ("legal", "litigation", "lawsuit", "lawsuits", "battle", "battles", "proceeding", "proceedings"),
-        ("legal proceedings", "litigation", "claims", "regulatory", "investigations", "contingencies"),
+        ("legal", "litigat", "lawsuit", "battl", "proceed", "regulatori", "investigat"),
+        (
+            "legal proceedings",
+            "litigation",
+            "claims",
+            "regulatory matters",
+            "contingencies",
+            "investigations",
+        ),
     ),
     (
-        ("restructuring", "impairment", "productivity", "severance"),
-        ("restructuring", "impairment", "productivity plan", "charges", "severance"),
+        ("restru", "impair", "sever", "productivity"),
+        ("restructuring", "impairment", "severance", "productivity plan", "charges"),
     ),
     (
-        ("employee", "employees", "headcount", "workforce", "personnel"),
+        ("capex", "capital", "expenditur"),
+        (
+            "capital expenditures",
+            "property plant and equipment",
+            "investing activities",
+            "purchases of property",
+        ),
+    ),
+    (
+        ("ebitda", "operating", "operat"),
+        (
+            "operating income",
+            "depreciation and amortization",
+            "income statement",
+            "operating profit",
+        ),
+    ),
+    (
+        ("margin", "profitabl", "gross"),
+        ("gross margin", "gross profit", "operating margin", "operating income", "cost of sales"),
+    ),
+    (
+        ("quick", "ratio", "liquidity", "solvenc"),
+        (
+            "current assets",
+            "current liabilities",
+            "cash and cash equivalents",
+            "short-term borrowings",
+            "working capital",
+        ),
+    ),
+    (
+        ("acquisit", "divest", "merger"),
+        ("acquisitions", "business combinations", "divestitures", "goodwill", "purchase price"),
+    ),
+    (
+        ("dividend", "buyback", "repurchas"),
+        ("dividends", "share repurchases", "common stock", "dividend declarations"),
+    ),
+    (
+        ("tax", "effective"),
+        (
+            "effective tax rate",
+            "income taxes",
+            "provision for income taxes",
+            "statutory",
+            "tax expense",
+        ),
+    ),
+    (
+        ("customer", "client", "concentrat"),
+        ("customers", "concentration", "largest customer", "distributors", "credit risk"),
+    ),
+    (
+        ("segment",),
+        ("reportable segment", "business segment", "segment information", "operating segments"),
+    ),
+    (
+        ("cyclical", "cyclicality", "seasonal"),
+        ("cyclical", "economic conditions", "seasonality", "industry conditions"),
+    ),
+    (
+        ("product", "servic", "offering", "brand", "categori"),
+        ("products", "services", "brands", "product categories", "offerings"),
+    ),
+    (
+        ("debt", "borrow", "liabilit", "leverage"),
+        (
+            "long-term debt",
+            "short-term borrowings",
+            "notes payable",
+            "total liabilities",
+            "interest expense",
+        ),
+    ),
+    (
+        ("employe", "headcount", "workforc", "personnel"),
         ("employees", "personnel", "workforce", "headcount"),
     ),
     (
-        ("dividend", "dividends", "buyback", "repurchase", "repurchases"),
-        ("dividends", "share repurchase", "common stock"),
+        ("drove", "driver", "change", "increas", "decreas"),
+        ("primarily due to", "increase in", "decrease in", "compared to", "higher", "lower"),
     ),
     (
-        ("acquisition", "acquisitions", "divestiture", "divestitures", "merger", "mergers"),
-        ("acquisitions", "divestitures", "business combination", "goodwill"),
+        ("retain", "retention", "churn"),
+        ("retention", "card member", "loyalty", "attrition", "customer retention"),
     ),
     (
-        ("debt", "borrowing", "borrowings", "leverage"),
-        ("long-term debt", "short-term borrowings", "notes", "interest expense"),
-    ),
-    (
-        ("liquidity", "solvency", "working", "capital"),
-        ("working capital", "current assets", "current liabilities", "cash and cash equivalents"),
-    ),
-    (
-        ("customer", "customers", "client", "clients"),
-        ("customers", "retailers", "distributors", "licensees"),
-    ),
-    (
-        ("product", "products", "service", "services", "brand", "brands"),
-        ("products", "services", "brands", "beverages", "snacks"),
-    ),
-    (
-        ("competition", "competitor", "competitors", "competitive"),
-        ("competition", "competitors", "competitive"),
-    ),
-    (
-        ("margin", "margins", "profitability", "profit"),
-        ("gross profit", "operating profit", "net income", "gross margin"),
-    ),
-    (
-        ("revenue", "revenues", "sales", "growth"),
-        ("net revenue", "net sales", "growth"),
-    ),
-    (
-        ("tax", "taxes", "rate"),
-        ("effective tax rate", "income taxes", "provision for income taxes"),
-    ),
-    (
-        ("pension", "pensions", "retirement"),
-        ("pension", "retiree medical", "benefit obligations"),
-    ),
-    (
-        ("executive", "executives", "officer", "officers", "ceo", "cfo", "director", "directors"),
-        ("executive officers", "board of directors", "chief executive officer"),
-    ),
-    (
-        ("risk", "risks", "uncertainty", "uncertainties"),
-        ("risk factors", "uncertainties", "adverse effect"),
-    ),
-    (
-        ("regulation", "regulations", "regulatory", "compliance"),
-        ("regulatory", "government regulation", "compliance"),
-    ),
-    (
-        ("inventory", "inventories", "turnover"),
-        ("inventories", "cost of sales", "inventory turnover"),
-    ),
-    (
-        ("capex", "capital", "expenditure", "expenditures"),
-        ("capital expenditures", "property plant and equipment"),
+        ("production", "forecast", "backlog", "rate"),
+        ("production rate", "backlog", "deliveries", "orders", "guidance"),
     ),
 )
 
-_TRIGGERS: dict[str, tuple[str, ...]] = {}
-for _trigger_words, _expansion_words in _CONCEPTS:
-    _expanded: list[str] = []
-    for _phrase in _expansion_words:
-        for _value in _phrase_roots(_phrase):
-            if _value not in _expanded:
-                _expanded.append(_value)
-    for _word in _trigger_words:
-        _TRIGGERS.setdefault(_root(_word), tuple(_expanded))
-
-# Adjacent word pairs whose presence marks a page that answers the question's intent.
-_PHRASE_HINTS: tuple[tuple[str, str], ...] = (
-    ("legal", "legal proceedings"),
-    ("legal", "legal litigation"),
-    ("litigation", "legal proceedings"),
-    ("battle", "litigation claims"),
-    ("geography", "north america"),
-    ("geography", "latin america"),
-    ("ebitda", "income statement"),
-    ("ebitda", "statement of cash flows"),
-    ("margin", "income statement"),
-    ("capex", "cash flow statement"),
-    ("restructuring", "restructuring impairment"),
-    ("employee", "employees personnel"),
-)
-_PHRASE_HINTS_ROOTS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = tuple(
-    (_root(trigger), _phrase_roots(phrase), _phrase_roots(phrase)[::-1])
-    for trigger, phrase in _PHRASE_HINTS
+_EXPANSIONS: tuple[tuple[frozenset[str], tuple[tuple[str, ...], ...]], ...] = tuple(
+    (
+        frozenset(token for phrase in triggers for token in _fold(phrase)),
+        tuple(pattern for pattern in (_fold(phrase) for phrase in expansions) if pattern),
+    )
+    for triggers, expansions in _CONCEPTS
 )
 
-# Statement titles are the authoritative page for questions that name a financial statement.
-_STATEMENT_TITLES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("income", _content_roots(_phrase_roots("consolidated statement of income"))),
-    ("cash", _content_roots(_phrase_roots("consolidated statement of cash flows"))),
-    ("balance", _content_roots(_phrase_roots("consolidated balance sheet"))),
-    ("equity", _content_roots(_phrase_roots("consolidated statement of equity"))),
-    ("comprehensive", _content_roots(_phrase_roots("consolidated statement of comprehensive income"))),
+# Statement titles mark the pages that carry reported figures.
+_STATEMENT_HEADS: tuple[tuple[str, ...], ...] = (
+    ("consol", "income"),
+    ("consol", "operat"),
+    ("consol", "balanc"),
+    ("consol", "cash"),
+    ("consol", "equiti"),
+    ("consol", "compre"),
+    ("statem", "financ", "positi"),
 )
-_STATEMENT_TRIGGERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("income", _content_roots(_phrase_roots("income statement"))),
-    ("cash", _content_roots(_phrase_roots("cash flow statement"))),
-    ("balance", _content_roots(_phrase_roots("balance sheet"))),
-    ("equity", _content_roots(_phrase_roots("statement of equity"))),
-    ("comprehensive", _content_roots(_phrase_roots("comprehensive income"))),
+_STATEMENT_KINDS: tuple[tuple[str, tuple[tuple[str, ...], ...]], ...] = (
+    (
+        "income",
+        (
+            ("consol", "income"),
+            ("consol", "operat"),
+            ("statem", "income"),
+            ("statem", "operat"),
+            ("summar", "financ"),
+        ),
+    ),
+    (
+        "balance",
+        (("consol", "balanc"), ("statem", "financ", "positi"), ("financ", "positi")),
+    ),
+    ("cash", (("consol", "cash"), ("statem", "cash"), ("cash", "flow"))),
+)
+_STATEMENT_INTENTS: tuple[tuple[str, frozenset[str]], ...] = (
+    (
+        "income",
+        frozenset(
+            "margin profit income earn ebitda revenu sale expens cost operat gross tax".split()
+        ),
+    ),
+    (
+        "balance",
+        frozenset(
+            "ratio liquid quick current asset liabilit debt inventori receiv cash balanc".split()
+        ),
+    ),
+    (
+        "cash",
+        frozenset(
+            "capex capital expenditur invest financ dividend repurchas depreci amorti flow".split()
+        ),
+    ),
 )
 
 _BM25_K1 = 1.2
-_BM25_B = 0.75
-_EXPANSION_WEIGHT = 0.55
-_PHRASE_BONUS = 3.0
-_STATEMENT_BONUS = 10.0
+_BM25_B = 0.3
+_EXPANSION_WEIGHT = 1.0
+_HEADING_WEIGHT = 4.0
+_STATEMENT_WEIGHT = 1.5
+_INTENT_WEIGHT = 2.0
+_HEADING_WIDTH = 24
+_PASSAGE_WEIGHT = 0.5
+_PASSAGE_WIDTH = 60
+_COMMON_TERM_RATIO = 0.35
 
 
-def _page_number(source_id: str) -> int | None:
-    try:
-        return int(source_id.rsplit(":", 1)[-1])
-    except ValueError:
-        return None
+def _is_statement(head: list[str]) -> bool:
+    if head.count("consol") >= 3:
+        return False
+    return any(all(token in head for token in pattern) for pattern in _STATEMENT_HEADS)
 
 
-def _statement_title(tokens: list[str]) -> str | None:
-    head = [token for token in tokens[:60] if token not in _HEADER_SKIP]
-    for name, pattern in _STATEMENT_TITLES:
-        span = len(pattern)
-        for start in range(len(head) - span + 1):
-            if tuple(head[start : start + span]) == pattern:
-                return name
-    return None
+def _statement_kinds(head: list[str]) -> frozenset[str]:
+    if head.count("consol") >= 3:
+        return frozenset()
+    return frozenset(
+        kind
+        for kind, patterns in _STATEMENT_KINDS
+        if any(all(token in head for token in pattern) for pattern in patterns)
+    )
 
 
-def _statement_intents(terms: set[str]) -> set[str]:
-    intents: set[str] = set()
-    for name, pattern in _STATEMENT_TRIGGERS:
-        required = {value for value in pattern if value not in _HEADER_SKIP}
-        if required and required <= terms:
-            intents.add(name)
-    return intents
+def _document_of(source_id: str) -> str:
+    body = source_id[4:] if source_id.startswith("pdf:") else source_id
+    parts = body.rsplit(":", 2)
+    return unquote(parts[0]) if len(parts) == 3 else body
+
+
+def _company_key(document_id: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", document_id.split("_")[0].lower())
+
+
+# Questions often refer to a filer by its market abbreviation instead of its full name.
+_DOCUMENT_ALIASES: tuple[tuple[str, str], ...] = (
+    ("americanexpress", "amex"),
+    ("jpmorgan", "jpm"),
+    ("johnsonjohnson", "jnj"),
+    ("proctergamble", "pg"),
+    ("internationalbusinessmachines", "ibm"),
+    ("generalmotors", "gm"),
+    ("generalelectric", "ge"),
+    ("merck", "mrk"),
+    ("pfizer", "pfe"),
+    ("walmart", "wmt"),
+    ("microsoft", "msft"),
+)
 
 
 class _PageIndex:
-    """Local BM25 over every stored page, reranked with report-aware signals."""
+    """Document-aware BM25 over every stored page, reranked with filing signals."""
 
     def __init__(self, entries: tuple[MemoryEntryRecord, ...]):
         self.citations: list[MemoryCitation] = []
         self.page_keys: list[str] = []
-        self.page_numbers: list[int | None] = []
-        self.titles: list[str | None] = []
+        self.heads: list[list[str]] = []
+        self.statements: list[bool] = []
+        self.statement_kinds: list[frozenset[str]] = []
         self.counts: list[dict[str, int]] = []
+        self.lengths: list[int] = []
         self.tokens: list[list[str]] = []
-        self.document_frequency: dict[str, int] = {}
+        self.by_document: dict[str, list[int]] = {}
         for record in entries:
             if record.state != "active" or not record.entry.text.strip():
                 continue
@@ -427,79 +502,201 @@ class _PageIndex:
             counts: dict[str, int] = {}
             for word in words:
                 counts[word] = counts.get(word, 0) + 1
-            for word in counts:
-                self.document_frequency[word] = self.document_frequency.get(word, 0) + 1
+            head = words[:_HEADING_WIDTH]
+            document = _company_key(_document_of(page_ref.source_id)) if page_ref is not None else ""
+            position = len(self.citations)
             self.citations.append(record.citation)
             self.page_keys.append(page_ref.source_id if page_ref is not None else record.entry.entry_id)
-            self.page_numbers.append(_page_number(page_ref.source_id) if page_ref is not None else None)
-            self.titles.append(_statement_title(words))
+            self.heads.append(head)
+            self.statements.append(_is_statement(head))
+            self.statement_kinds.append(_statement_kinds(head))
             self.counts.append(counts)
+            self.lengths.append(len(words))
             self.tokens.append(words)
-        total = sum(len(words) for words in self.tokens)
-        self.average_length = total / len(self.tokens) if self.tokens else 0.0
+            if document:
+                self.by_document.setdefault(document, []).append(position)
 
-    def _has_phrase(self, page: int, pattern: tuple[str, ...]) -> bool:
-        sequence = self.tokens[page]
-        span = len(pattern)
-        for start in range(len(sequence) - span + 1):
-            if tuple(sequence[start : start + span]) == pattern:
-                return True
-        return False
+    def _target_document(self, question: str) -> str | None:
+        lowered = question.lower()
+        compact = re.sub(r"[^a-z0-9]", "", lowered)
+        words = set(_TOKEN_PATTERN.findall(lowered))
+        matches: list[str] = []
+        for name in self.by_document:
+            if len(name) >= 4 and name in compact:
+                matches.append(name)
+                continue
+            if len(name) >= 2 and (
+                name in words
+                or re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", lowered)
+            ):
+                matches.append(name)
+                continue
+            if any(
+                name.startswith(canonical)
+                and len(alias) >= 3
+                and re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", lowered)
+                for canonical, alias in _DOCUMENT_ALIASES
+            ):
+                matches.append(name)
+        if not matches:
+            return None
+        return max(matches, key=len)
+
+    def _expansions(
+        self, terms: list[str]
+    ) -> tuple[set[str], tuple[str, ...], list[tuple[str, ...]]]:
+        pairs: set[str] = set()
+        singles: set[str] = set()
+        long_patterns: list[tuple[str, ...]] = []
+        present = set(terms)
+        for triggers, patterns in _EXPANSIONS:
+            if not (triggers & present):
+                continue
+            for pattern in patterns:
+                if len(pattern) == 1:
+                    singles.add(pattern[0])
+                elif len(pattern) == 2:
+                    pairs.add(pattern[0] + " " + pattern[1])
+                elif len(pattern) > 2:
+                    long_patterns.append(pattern)
+        return pairs, singles, long_patterns
+
+    def _passage(self, position: int, idf: dict[str, float]) -> float:
+        tokens = self.tokens[position]
+        width = _PASSAGE_WIDTH
+        if len(tokens) <= width:
+            window = tokens
+            counts: dict[str, int] = {}
+            for token in window:
+                if token in idf:
+                    counts[token] = counts.get(token, 0) + 1
+            if not counts:
+                return 0.0
+            norm = _BM25_K1 * (1.0 - _BM25_B + _BM25_B * len(window) / width)
+            return sum(
+                idf[term] * freq * (_BM25_K1 + 1.0) / (freq + norm)
+                for term, freq in counts.items()
+            )
+        stride = width // 2
+        norm = _BM25_K1
+        best = 0.0
+        for start in range(0, len(tokens) - width + 1, stride):
+            counts = {}
+            for token in tokens[start : start + width]:
+                if token in idf:
+                    counts[token] = counts.get(token, 0) + 1
+            if not counts:
+                continue
+            score = sum(
+                idf[term] * freq * (_BM25_K1 + 1.0) / (freq + norm)
+                for term, freq in counts.items()
+            )
+            if score > best:
+                best = score
+        return best
 
     def rank(self, question: str, limit: int) -> tuple[MemoryCitation, ...]:
-        base = _query_terms(question)
-        if not base or not self.tokens:
+        terms = _query_terms(question)
+        if not terms or not self.citations:
             return ()
-        weighted: dict[str, float] = {term: 1.0 for term in base}
-        for term in base:
-            for expanded in _TRIGGERS.get(term, ()):
-                if expanded not in weighted:
-                    weighted[expanded] = _EXPANSION_WEIGHT
-        intents = _statement_intents(set(base))
-        hints = [(pattern, backward) for trigger, pattern, backward in _PHRASE_HINTS_ROOTS if trigger in weighted]
-        total = len(self.tokens)
-        scored: list[tuple[float, int, int]] = []
-        for page in range(total):
-            counts = self.counts[page]
-            length = len(self.tokens[page])
-            norm = _BM25_K1 * (1.0 - _BM25_B + _BM25_B * length / (self.average_length or 1.0))
+        wanted = frozenset(
+            kind for kind, triggers in _STATEMENT_INTENTS if triggers.intersection(terms)
+        )
+        target = self._target_document(question)
+        candidates = self.by_document.get(target) if target else None
+        if not candidates:
+            candidates = list(range(len(self.citations)))
+        total = len(candidates)
+        floor = max(2, int(total * _COMMON_TERM_RATIO))
+        term_df = {term: 0 for term in terms}
+        for position in candidates:
+            counts = self.counts[position]
+            for term in terms:
+                if term in counts:
+                    term_df[term] += 1
+        kept = [term for term in terms if term_df[term] <= floor]
+        if kept:
+            terms = kept
+            term_df = {term: term_df[term] for term in terms}
+        idf = {
+            term: math.log(1.0 + (total - term_df[term] + 0.5) / (term_df[term] + 0.5))
+            for term in terms
+        }
+        weight_total = sum(idf.values()) or 1.0
+        average_length = sum(self.lengths[position] for position in candidates) / total
+        pairs, singles, long_patterns = self._expansions(terms)
+        lexical: list[tuple[float, int]] = []
+        for position in candidates:
+            counts = self.counts[position]
+            length = self.lengths[position] or 1
+            norm = _BM25_K1 * (1.0 - _BM25_B + _BM25_B * length / average_length)
             score = 0.0
-            matched = False
-            for term, weight in weighted.items():
+            for term in terms:
                 frequency = counts.get(term, 0)
-                if not frequency:
-                    continue
-                matched = True
-                document_frequency = self.document_frequency.get(term, 0)
-                idf = math.log(1.0 + (total - document_frequency + 0.5) / (document_frequency + 0.5))
-                score += weight * idf * frequency * (_BM25_K1 + 1.0) / (frequency + norm)
-            if not matched:
-                continue
-            for pattern, backward in hints:
-                if self._has_phrase(page, pattern) or self._has_phrase(page, backward):
-                    score += _PHRASE_BONUS
-                    break
-            if intents and self.titles[page] in intents:
-                score += _STATEMENT_BONUS
-            if score > 0.0:
-                scored.append(
-                    (score, self.page_numbers[page] if self.page_numbers[page] is not None else page, page)
-                )
-        scored.sort(key=lambda item: (-item[0], item[1]))
+                if frequency:
+                    score += idf[term] * frequency * (_BM25_K1 + 1.0) / (frequency + norm)
+            lexical.append((score, position))
+        scale = max(score for score, _ in lexical) or 1.0
+        passages = {
+            position: self._passage(position, idf)
+            for score, position in lexical
+            if score > 0.0
+        }
+        passage_scale = max(passages.values(), default=0.0) or 1.0
+        scored_pages: list[tuple[float, int]] = []
+        for score, position in lexical:
+            rank = score / scale
+            if position in passages:
+                rank += _PASSAGE_WEIGHT * passages[position] / passage_scale
+            head = self.heads[position]
+            rank += _HEADING_WEIGHT * sum(idf[term] for term in terms if term in head) / weight_total
+            if pairs or singles or long_patterns:
+                page_tokens = self.tokens[position]
+                found: set[str] = set()
+                for index in range(len(page_tokens) - 1):
+                    key = page_tokens[index] + " " + page_tokens[index + 1]
+                    if key in pairs:
+                        found.add(key)
+                if singles:
+                    found.update(singles.intersection(page_tokens))
+                for pattern in long_patterns:
+                    span = len(pattern)
+                    if any(
+                        tuple(page_tokens[start : start + span]) == pattern
+                        for start in range(len(page_tokens) - span + 1)
+                    ):
+                        found.add(" ".join(pattern))
+                rank += _EXPANSION_WEIGHT * len(found)
+            if self.statements[position]:
+                rank += _STATEMENT_WEIGHT
+            if self.statement_kinds[position] & wanted:
+                rank += _INTENT_WEIGHT
+            scored_pages.append((rank, position))
+        scored = sorted(scored_pages, key=lambda item: -item[0])
         selected: list[MemoryCitation] = []
         seen: set[str] = set()
-        for _, _, page in scored:
-            key = self.page_keys[page]
+        for _, position in scored:
+            key = self.page_keys[position]
             if key in seen:
                 continue
             seen.add(key)
-            selected.append(self.citations[page])
+            selected.append(self.citations[position])
             if len(selected) >= limit:
                 break
         return tuple(selected)
 
 
-_INDEX_CACHE: dict[tuple[str, int], _PageIndex] = {}
+_INDEX_CACHE: dict[tuple[Any, ...], _PageIndex] = {}
+
+
+def _index_key(memory_ref: Any, entries: tuple[MemoryEntryRecord, ...]) -> tuple[Any, ...]:
+    digest = hashlib.blake2b(digest_size=16)
+    for record in entries:
+        digest.update(record.entry.entry_id.encode("utf-8", "replace"))
+        digest.update(b"\x00")
+        digest.update(str(len(record.entry.text)).encode("ascii"))
+        digest.update(b"\x01")
+    return (memory_ref.artifact_id, memory_ref.revision, len(entries), digest.hexdigest())
 
 
 async def _page_index(memory) -> _PageIndex | None:
@@ -507,11 +704,11 @@ async def _page_index(memory) -> _PageIndex | None:
     memory_ref = page.memory_ref
     if memory_ref is None:
         return None
-    key = (memory_ref.artifact_id, memory_ref.revision)
+    key = _index_key(memory_ref, page.entries)
     index = _INDEX_CACHE.get(key)
     if index is None:
         index = _PageIndex(page.entries)
-        if len(_INDEX_CACHE) >= 8:
+        if len(_INDEX_CACHE) >= 4:
             _INDEX_CACHE.clear()
         _INDEX_CACHE[key] = index
     return index
