@@ -71,6 +71,30 @@ python server.py
    - Dify 与后端同机非 Docker：改成 `http://127.0.0.1:8765`。
 4. 发布应用，在「调试与预览」里按第 4 节的样例体验。
 
+### 3.4 没有 Dify 引擎时复现主链路
+
+`scripts/run_chatflow.py` 直接读取导出的 DSL，按 `workflow.graph` 的节点与连线顺序执行，
+复刻 Dify 1.x 工作流语义：变量池（start 节点输入）、`{{#节点ID.变量#}}` 模板替换、
+http-request 节点 POST JSON、llm 节点、answer 节点。每个节点的输入/输出/耗时都会写入 JSONL 轨迹，
+用来证明 Chatflow 图本身是可运行的，而不是只有一堆散装 HTTP 脚本。
+
+```bash
+# 后端（3.2 节）启动后：
+python scripts/run_chatflow.py \
+  --base-url http://127.0.0.1:8765 \
+  --player-id 阿飞 \
+  --action "我把后院的酒坛砸了" \
+  --trace logs/chatflow-run.jsonl
+```
+
+- 设置了 `OPENAI_BASE_URL` / `OPENAI_API_KEY` 时，llm 节点真实调用模型；
+- 未设置时走本地确定性 mock 回复（`--mock-llm` 可强制），不联网、不消耗额度；
+- 已提交的运行证据：`logs/chatflow-run.jsonl`，6 个节点依次为
+  `开始 → 读取记忆 → 检索传说 → 记账结算 → 老周回应 → 直接回复`，其中「读取记忆」的返回里
+  能看到上一轮留下的「砸场子×1」，说明记忆确实落在 seekdb。
+
+这套执行器只用于没有 Dify 引擎的环境做验证；DSL 本身仍可直接导入 Dify 1.x 使用（3.3 节）。
+
 ## 4. 验证样例
 
 完整原始输出见 `logs/verification.log`，逐步说明见 `samples/verification.md`。
