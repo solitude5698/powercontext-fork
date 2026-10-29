@@ -113,6 +113,17 @@ python scripts/run_dify_engine.py
 `memory_hint` 仍是 `老周的记仇墙：砸场子×1`——记忆来自 seekdb，不是对话上下文。
 session1 结算后金币 100→85、声望 0→-12；session3 结算后金币 53、声望 4，事件表里三条记录按时间倒序排列。
 
+Dify 控制台侧的同一批记录也留了截图（「日志」页 → 会话详情，对话 ID 与上表一致）：
+
+| 截图 | 内容 |
+| --- | --- |
+| `logs/screenshots/dify-log-list.png` | 应用「日志」页，同一玩家 `阿飞` 的三条会话记录 |
+| `logs/screenshots/dify-log-session2-recall.png` | 对话 ID `590F7669-7AE3-438B-9E9A-8A695D506BF5`，新会话里老周直接翻出「砸场子×1」的旧账 |
+| `logs/screenshots/dify-log-session3-tab.png` | 对话 ID `A298C7E6-045F-4D33-A95A-4CB522E9D5D6`，老周复述酒坛旧事并搬出《断魂酒坛》的规矩 |
+| `logs/screenshots/dify-workflow-canvas.png` | 「编排」画布：开始 → 读取记忆 → 检索传说 → 记账结算 → 老周回应 → 直接回复 |
+
+三张日志截图里的玩家名、对话 ID 与 `logs/dify-engine-run.jsonl` 完全对应，示例玩家 ID 全程只用 `阿飞`。
+
 ### 3.5 没有 Dify 引擎时的降级复现
 
 `scripts/run_chatflow.py` 直接读取导出的 DSL，按 `workflow.graph` 的节点与连线顺序执行，
