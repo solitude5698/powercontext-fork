@@ -277,8 +277,8 @@ workflow:
           completion_params:
             temperature: 0.85
           mode: chat
-          name: gpt-4o-mini
-          provider: openai
+          name: MiniMax-Text-01
+          provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: 7f2b0f38-8f53-4b6e-9d2f-6b8a3c1d2e40
           role: system

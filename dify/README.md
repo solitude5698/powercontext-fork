@@ -27,8 +27,8 @@ Dify Chatflow 负责整条流程：读取记忆 → 检索传说 → 记账结�
 
 - seekdb 1.4.0（本仓库在 seekdb 1.3.0 Windows 构建 + 1.4.0 上验证；两者 SQL 与全文索引语法一致）
 - Python 3.10+
-- Dify 1.x（DSL 按 `version: 0.1.5` 导出格式编写；导入后若提示模型/插件缺失，按提示绑定即可）
-- 任意一个 OpenAI 兼容模型服务（DSL 里占位为 `openai / gpt-4o-mini`，导入后请替换为你自己的模型）
+- Dify 1.x（实测 1.18.0；DSL 按 `version: 0.1.5` 导出格式编写，导入后若提示插件缺失，按提示安装 `openai_api_compatible` 即可）
+- 任意一个 OpenAI 兼容模型服务（DSL 里写的是 `langgenius/openai_api_compatible` + `MiniMax-Text-01`，换成你自己的端点与模型名）
 
 ## 3. 启动步骤
 
@@ -65,18 +65,59 @@ python server.py
 ### 3.3 导入 Dify
 
 1. Dify → 工作室 → 导入 DSL → 选择 `dsl/cyber-inn.yml`。
-2. 打开应用 → 编排，把「老周回应」节点的模型换成本地可用的模型（其余节点无需改动）。
+2. 打开应用 → 编排，把「老周回应」节点的模型换成本地可用的模型：节点默认指向
+   `langgenius/openai_api_compatible/openai_api_compatible` 供应商（DSL 里写的是
+   `MiniMax-Text-01`），导入前先装好该插件并配置你的 OpenAI 兼容端点与模型名。
 3. 检查三个 HTTP 节点的地址：
    - Dify 用 Docker 部署：保持 `http://host.docker.internal:8765`；Linux 需给 Dify 容器加 `extra_hosts: host.docker.internal:host-gateway`。
    - Dify 与后端同机非 Docker：改成 `http://127.0.0.1:8765`。
 4. 发布应用，在「调试与预览」里按第 4 节的样例体验。
 
-### 3.4 没有 Dify 引擎时复现主链路
+### 3.4 真实 Dify 引擎运行证据
+
+本仓库的证据不是脚本模拟出来的：`logs/dify-engine-run.jsonl` 由真实运行的 Dify 1.18.0 引擎产出，
+每个会话都带 `workflow_run_id`、`conversation_id` 和六个节点的 `node_started/node_finished` 轨迹。
+
+复现方式（Dify 官方 docker compose + OpenAI 兼容模型 + 本后端）：
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/langgenius/dify.git
+cd dify && git sparse-checkout set docker && cd docker
+cp .env.example .env
+# 1) 选一个向量库（示例用 qdrant；weaviate 镜像在部分网络下不可达）
+#    COMPOSE_PROFILES=postgresql,qdrant / VECTOR_STORE=qdrant / QDRANT_URL=http://qdrant:6333
+# 2) 让 HTTP 节点能连到宿主机的后端（api / worker 都加）
+#    extra_hosts: ["host.docker.internal:host-gateway"]
+# 3) 本地演示直连后端，跳过 SSRF 代理（生产环境请保留代理）
+#    SSRF_PROXY_HTTP_URL= / SSRF_PROXY_HTTPS_URL=
+docker compose up -d
+# 4) 后台安装 langgenius/openai_api_compatible 插件，把任意 OpenAI 兼容模型
+#    （本项目实测 ModelScope/MiniMax 兼容端点）配成自定义模型，模型名填进 DSL 的
+#    「老周回应」节点；然后在仓库根目录执行：
+DIFY_BASE_URL=http://127.0.0.1 DIFY_CONSOLE_EMAIL=... DIFY_CONSOLE_PASSWORD=... \
+INN_BASE_URL=http://127.0.0.1:8765 \
+python scripts/run_dify_engine.py
+```
+
+`scripts/run_dify_engine.py` 通过 Dify 控制台 API 导入 DSL、发布应用、申请 API Key，
+再用 `/v1/chat-messages` 以流式方式发起三次**各自独立的新会话**（同一个玩家 `阿飞`），
+把 SSE 事件写进 `logs/dify-engine-run.jsonl`：
+
+| 会话 | 输入 | conversation_id | workflow_run_id |
+| --- | --- | --- | --- |
+| session1 | 我把后院的酒坛砸了 | 35e7c8fb-4c18-4fbe-b9a8-bcd54cfeb9db | 99821cab-b760-4211-88c6-3833b03663d8 |
+| session2 | 你还记得我上次在你店里干了什么吗？ | 590f7669-7ae3-438b-9e9a-8a695d506bf5 | f71de93f-3f63-4353-8e92-e51f8072b165 |
+| session3 | 我想用一壶桂花酿抵了旧账 | a298c7e6-045f-4d33-a95a-4cb522e9d5d6 | 907ba32f-509c-42c7-84b4-fe1aadf18883 |
+
+三次会话的 conversation_id 互不相同，但 session2 / session3 的「读取记忆」节点返回的
+`memory_hint` 仍是 `老周的记仇墙：砸场子×1`——记忆来自 seekdb，不是对话上下文。
+session1 结算后金币 100→85、声望 0→-12；session3 结算后金币 53、声望 4，事件表里三条记录按时间倒序排列。
+
+### 3.5 没有 Dify 引擎时的降级复现
 
 `scripts/run_chatflow.py` 直接读取导出的 DSL，按 `workflow.graph` 的节点与连线顺序执行，
 复刻 Dify 1.x 工作流语义：变量池（start 节点输入）、`{{#节点ID.变量#}}` 模板替换、
-http-request 节点 POST JSON、llm 节点、answer 节点。每个节点的输入/输出/耗时都会写入 JSONL 轨迹，
-用来证明 Chatflow 图本身是可运行的，而不是只有一堆散装 HTTP 脚本。
+http-request 节点 POST JSON、llm 节点、answer 节点。每个节点的输入/输出/耗时都会写入 JSONL 轨迹。
 
 ```bash
 # 后端（3.2 节）启动后：
@@ -89,15 +130,13 @@ python scripts/run_chatflow.py \
 
 - 设置了 `OPENAI_BASE_URL` / `OPENAI_API_KEY` 时，llm 节点真实调用模型；
 - 未设置时走本地确定性 mock 回复（`--mock-llm` 可强制），不联网、不消耗额度；
-- 已提交的运行证据：`logs/chatflow-run.jsonl`，6 个节点依次为
-  `开始 → 读取记忆 → 检索传说 → 记账结算 → 老周回应 → 直接回复`，其中「读取记忆」的返回里
-  能看到上一轮留下的「砸场子×1」，说明记忆确实落在 seekdb。
-
-这套执行器只用于没有 Dify 引擎的环境做验证；DSL 本身仍可直接导入 Dify 1.x 使用（3.3 节）。
+- 对应证据：`logs/chatflow-run.jsonl`，仅用于快速自测，**不作为引擎运行证据**；
+  引擎证据见 3.4 节的 `logs/dify-engine-run.jsonl`。
 
 ## 4. 验证样例
 
-完整原始输出见 `logs/verification.log`，逐步说明见 `samples/verification.md`。
+Dify 引擎侧的完整轨迹见 `logs/dify-engine-run.jsonl`（3.4 节，含三个独立会话的 `workflow_run_id`
+与逐节点输入输出）；后端侧的分步输出见 `logs/verification.log`，逐步说明见 `samples/verification.md`。
 
 复现一遍（会把 `阿飞` 这个玩家的数据重置后重建）：
 
