@@ -81,14 +81,27 @@ def init_db() -> None:
 CONSEQUENCES = (
     (("偷", "抢", "砸", "烧", "踢", "掀", "撕", "毁"), -15, -12, "砸场子"),
     (("请", "买单", "送", "夸", "敬"), -20, 10, ""),
-    (("还", "赔", "补"), -30, 15, ""),
+    (("还账", "还钱", "还债", "还清", "还款", "还你", "赔偿", "赔钱", "赔你", "补上", "补偿"), -30, 15, ""),
     (("骗", "吹", "撒谎", "赖"), 0, -8, "满嘴跑火车"),
     (("帮", "救", "挡", "扶"), -5, 12, "欠你一条命"),
     (("打听", "问", "想起", "上次", "记得"), 0, 2, ""),
 )
 
+# 回忆当天的旧账是只读动作：问句里常带“还”（还记得/还在），不能当成还款
+RECALL_WORDS = ("记得", "上次", "上回", "之前", "干过", "做过")
+DEED_WORDS = ("砸", "偷", "抢", "烧", "踢", "掀", "撕", "毁", "请", "买单", "送", "夸", "敬", "赔", "还")
+
+
+def is_recall(action: str) -> bool:
+    text = action.strip()
+    if any(mark in text for mark in ("？", "?", "吗")):
+        return True
+    return any(word in text for word in RECALL_WORDS) and not any(deed in text for deed in DEED_WORDS)
+
 
 def judge(action: str) -> dict:
+    if is_recall(action):
+        return {"gold_delta": 0, "rep_delta": 0, "tag": "", "recall": True}
     for words, gold, rep, tag in CONSEQUENCES:
         if any(word in action for word in words):
             return {"gold_delta": gold, "rep_delta": rep, "tag": tag}
@@ -190,6 +203,9 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     ensure_player(cur, player_id)
                     verdict = judge(action)
+                    if verdict.get("recall"):
+                        self._send({"state": load_state(cur, player_id), "consequence": verdict})
+                        return
                     cur.execute(
                         "INSERT INTO events (player_id, action, tag, gold_delta, rep_delta) VALUES (%s, %s, %s, %s, %s)",
                         (player_id, action, verdict["tag"], verdict["gold_delta"], verdict["rep_delta"]),

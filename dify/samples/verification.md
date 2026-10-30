@@ -15,10 +15,11 @@
 | 1 | 重置 | `POST /api/reset {"player_id":"阿飞"}` | 返回 ok，事件清空 |
 | 2 | 前情 | `POST /api/act {"player_id":"阿飞","action":"我上次喝多了，把后院的酒坛砸了"}` | 金币 -15、声望 -12、记仇墙「砸场子×1」 |
 | 3 | 新会话读记忆 | `POST /api/state {"player_id":"阿飞"}` | 金币 85、声望 -12、记仇墙仍为「砸场子×1」 |
-| 4 | 检索传说 | `POST /api/lore/search {"query":"酒坛 规矩","k":3}` | 命中《不收现银的规矩》《断魂酒坛》 |
-| 5 | 本次行为 | `POST /api/act {"player_id":"阿飞","action":"我趁老周转身，把账本撕了"}` | 金币 70、声望 -24、记仇墙「砸场子×2」 |
-| 6 | 结算后读回 | `POST /api/state {"player_id":"阿飞"}` | 与第 5 步一致，且最近事件按时间倒序列出两条 |
-| 7 | 检索传说 | `POST /api/lore/search {"query":"欠账 还清 名字","k":2}` | 命中《不打烊的账本》 |
+| 4 | 记忆回顾问句 | `POST /api/act {"player_id":"阿飞","action":"你还记得我上次在你店里干了什么吗？"}` | 只读：`consequence.recall=true`，金币、声望、回合数不变（问句里的“还”不触发还款） |
+| 5 | 检索传说 | `POST /api/lore/search {"query":"酒坛 规矩","k":3}` | 命中《不收现银的规矩》《断魂酒坛》 |
+| 6 | 本次行为 | `POST /api/act {"player_id":"阿飞","action":"我趁老周转身，把账本撕了"}` | 金币 70、声望 -24、记仇墙「砸场子×2」 |
+| 7 | 结算后读回 | `POST /api/state {"player_id":"阿飞"}` | 与第 6 步一致，且最近事件按时间倒序列出两条 |
+| 8 | 检索传说 | `POST /api/lore/search {"query":"欠账 还清 名字","k":2}` | 命中《不打烊的账本》 |
 
 ## 实际结果
 
@@ -26,9 +27,10 @@
 
 - 第 2 步返回 `gold_delta=-15, rep_delta=-12, tag=砸场子`；
 - 第 3 步重新建立会话读取状态，`memory_hint = "老周的记仇墙：砸场子×1"`；
-- 第 4 步返回两条传说，`断魂酒坛` 得分 0.951；
-- 第 5 步返回 `gold=70, reputation=-24, rounds=2, 记仇墙=砸场子×2`；
-- 第 7 步返回《不打烊的账本》，得分 3.51。
+- 第 4 步返回 `gold_delta=0, rep_delta=0, recall=true`，状态仍是 `gold=85, reputation=-12, rounds=1`；
+- 第 5 步返回两条传说，`断魂酒坛` 得分 0.951；
+- 第 6 步返回 `gold=70, reputation=-24, rounds=2, 记仇墙=砸场子×2`；
+- 第 8 步返回《不打烊的账本》，得分 3.51。
 
 ## seekdb 内的实际数据（验证后直接查询）
 

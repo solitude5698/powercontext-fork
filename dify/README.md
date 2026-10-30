@@ -105,21 +105,23 @@ python scripts/run_dify_engine.py
 
 | 会话 | 输入 | conversation_id | workflow_run_id |
 | --- | --- | --- | --- |
-| session1 | 我把后院的酒坛砸了 | 35e7c8fb-4c18-4fbe-b9a8-bcd54cfeb9db | 99821cab-b760-4211-88c6-3833b03663d8 |
-| session2 | 你还记得我上次在你店里干了什么吗？ | 590f7669-7ae3-438b-9e9a-8a695d506bf5 | f71de93f-3f63-4353-8e92-e51f8072b165 |
-| session3 | 我想用一壶桂花酿抵了旧账 | a298c7e6-045f-4d33-a95a-4cb522e9d5d6 | 907ba32f-509c-42c7-84b4-fe1aadf18883 |
+| session1 | 我把后院的酒坛砸了 | 90e8db90-45ff-4b61-830c-c4fb08612240 | 0cdc501a-2034-4c08-8a2f-4164ef1b7a59 |
+| session2 | 你还记得我上次在你店里干了什么吗？ | d2dd1224-dbd6-41f6-8706-9a77b7bdd89f | 0d8284d4-7e69-4397-9612-cd1078f983e4 |
+| session3 | 我想用一壶桂花酿抵了旧账 | 4e8f8500-f19f-4410-b852-9b44b869b31e | 2ee7a55f-ada3-44cb-8efb-b761095eb6bc |
 
 三次会话的 conversation_id 互不相同，但 session2 / session3 的「读取记忆」节点返回的
 `memory_hint` 仍是 `老周的记仇墙：砸场子×1`——记忆来自 seekdb，不是对话上下文。
-session1 结算后金币 100→85、声望 0→-12；session3 结算后金币 53、声望 4，事件表里三条记录按时间倒序排列。
+session1 结算后金币 100→85、声望 0→-12；session2 是纯粹的回忆问句，判定为只读
+（`consequence.recall = true`），金币、声望、回合数全部保持不变；session3 结算后金币 83、声望 -11，
+事件表里两条记录按时间倒序排列。问句与行为句分开判定，避免「还记得」里的“还”被还款规则误命中。
 
 Dify 控制台侧的同一批记录也留了截图（「日志」页 → 会话详情，对话 ID 与上表一致）：
 
 | 截图 | 内容 |
 | --- | --- |
-| `logs/screenshots/dify-log-list.png` | 应用「日志」页，同一玩家 `阿飞` 的三条会话记录 |
-| `logs/screenshots/dify-log-session2-recall.png` | 对话 ID `590F7669-7AE3-438B-9E9A-8A695D506BF5`，新会话里老周直接翻出「砸场子×1」的旧账 |
-| `logs/screenshots/dify-log-session3-tab.png` | 对话 ID `A298C7E6-045F-4D33-A95A-4CB522E9D5D6`，老周复述酒坛旧事并搬出《断魂酒坛》的规矩 |
+| `logs/screenshots/dify-log-list.png` | 应用「日志」页按时间倒序，最上面三条（2026-10-30 06:41 UTC）即本轮三个会话，玩家都是 `阿飞` |
+| `logs/screenshots/dify-log-session2-recall.png` | 对话 ID `D2DD1224-DBD6-41F6-8706-9A77B7BDD89F`，新会话里老周直接翻出「砸场子×1」的旧账 |
+| `logs/screenshots/dify-log-session3-tab.png` | 对话 ID `4E8F8500-F19F-4410-B852-9B44B869B31E`，老周复述酒坛旧事并搬出《断魂酒坛》的规矩 |
 | `logs/screenshots/dify-workflow-canvas.png` | 「编排」画布：开始 → 读取记忆 → 检索传说 → 记账结算 → 老周回应 → 直接回复 |
 
 三张日志截图里的玩家名、对话 ID 与 `logs/dify-engine-run.jsonl` 完全对应，示例玩家 ID 全程只用 `阿飞`。
@@ -159,8 +161,10 @@ python scripts/verify.py http://127.0.0.1:8765
 
 1. 第 2 步「我上次喝多了，把后院的酒坛砸了」→ 金币 100→85，声望 0→-12，记仇墙出现「砸场子×1」。
 2. 第 3 步重新读取状态（模拟新会话）→ 记忆里仍有「砸场子×1」，说明状态存在 seekdb 而不是对话上下文里。
-3. 第 4 步检索「酒坛 规矩」→ 命中《断魂酒坛》《不收现银的规矩》。
-4. 第 5 步「我把账本撕了」→ 记仇墙变成「砸场子×2」。
+3. 第 4 步「你还记得我上次在你店里干了什么吗？」→ 只读（`recall: true`），金币/声望/回合数不变；
+   问句里的“还”不会被当成还款。判定规则的回归用例：`python dify/tests/test_judge.py`。
+4. 第 5 步检索「酒坛 规矩」→ 命中《断魂酒坛》《不收现银的规矩》。
+5. 第 6 步「我把账本撕了」→ 记仇墙变成「砸场子×2」。
 
 在 Dify 里对应的一次对话：
 
